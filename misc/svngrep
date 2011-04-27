@@ -1,0 +1,2 @@
+#!/bin/sh
+find -type f | grep -v '\.svn/' | xargs grep $*

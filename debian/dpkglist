@@ -1,0 +1,2 @@
+#!/bin/sh
+dpkg -l "$1" | awk '/^.i. / { print $2 }'

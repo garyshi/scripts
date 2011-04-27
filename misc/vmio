@@ -1,0 +1,54 @@
+#!/usr/bin/python
+import sys, re
+import os, stat
+ 
+def read_dm():
+	dm = {}
+	mapper_dir = '/dev/mapper/'
+	for name in os.listdir(mapper_dir):
+		if name[0] == '.' or name == 'control': continue
+		try: rdev = os.stat(mapper_dir + name).st_rdev
+		except OSError: continue
+		dev_major = rdev >> 8 # is this fixed 253?
+		dev_minor = rdev & 0xff
+		#print dev_major, dev_minor, name
+		dm[dev_minor] = name
+	return dm
+ 
+def main(dmonly, n):
+	dm = read_dm()
+	pattern = re.compile('(dm-[0-9]+)')
+	p = os.popen('/usr/bin/iostat %d' % n, 'r')
+	while True:
+		try:
+			# don't use "for line in p", which is more buffered,
+			# result in more blocking.
+			line = p.readline()
+			if not line: break
+			if dmonly:
+				x = line[:2]
+				if x in ('hd','sd','md'): continue
+			name = None
+			line = line.rstrip()
+			m = pattern.match(line)
+			if m:
+				try: name = dm[int(m.group(1)[3:])]
+				except: pass
+			if name: line += '	%s' % name
+			print line
+			sys.stdout.flush()
+		except KeyboardInterrupt:
+			break
+	p.close()
+ 
+if __name__ == '__main__':
+	i = 1
+	dmonly = True
+	try:
+		if sys.argv[i] == '-a':
+			dmonly = False
+			i += 1
+	except: pass
+	try: n = int(sys.argv[i])
+	except: n = 1
+	main(dmonly, n)
