@@ -1,0 +1,51 @@
+#!/usr/bin/python
+import sys
+import os
+from subprocess import Popen, PIPE
+
+#KNOWN_HOSTS=$1
+#NETWORK="192.168.4.0/23"
+#nmap -n -p 22 $NETWORK
+#cat zz | awk '/^Interesting ports on/ { print substr($4,0,length($4)) }' | ssh-keyscan -f - -t rsa $ADDRLIST
+def parse_nmap_ipaddrs(f):
+	L = []
+	for line in f:
+		if line.startswith('Interesting ports on'):
+			ipaddr = line.split()[3][:-1]
+			L.append(ipaddr)
+	return L
+
+'''
+f = open('zz-nmap')
+ipaddrs = parse_nmap_ipaddrs(f)
+f.close()
+
+rsa_pubkeys = {}
+p = Popen('ssh-keyscan -f - -t rsa', shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+stdout,stderr = p.communicate('\n'.join(ipaddrs))
+p.wait() # close the subprocess
+for line in stdout.split('\n'):
+	p = line.split()
+	if len(p) == 3:
+		ipaddr,keytype,pubkey = p
+		rsa_pubkeys[ipaddr] = pubkey
+'''
+
+rsa_pubkeys = {}
+f = open('zz-rsakeys')
+for line in f:
+	ipaddr,pubkey = line.split()
+	rsa_pubkeys[ipaddr] = pubkey
+#print rsa_pubkeys
+
+for filename in sys.argv[1:]:
+	for ipaddr in rsa_pubkeys:
+		# TODO: redirect stdout/stderr to /dev/null
+		os.spawnlp(os.P_WAIT, 'ssh-keygen', 'ssh-keygen', '-R', ipaddr, '-f', filename)
+	try: os.unlink(filename + '.old')
+	except: pass
+	f = open(filename, 'a')
+	for ipaddr,pubkey in rsa_pubkeys.iteritems():
+		f.write('%s ssh-rsa %s\n' % (ipaddr, pubkey))
+	f.close()
+	# TODO: shall we hash it again?
