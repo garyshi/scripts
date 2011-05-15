@@ -1,0 +1,10 @@
+在postfix上部署FILTER
+=====================
+1. 建立filter用户专门用来过滤邮件。
+2. 在master.cf添加filter service:
+	filter    unix  -       n       n       -       10      pipe
+	  flags=Rq user=filter null_sender=
+	  argv=/opt/antispam/filterspam.py -f ${sender} ${recipient}
+3. 给master.cf的smtp service设置content_filter:
+	smtp      inet  n       -       n       -       -       smtpd
+	  -o content_filter=filter:dummy
