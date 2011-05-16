@@ -15,6 +15,8 @@ def decode_header(value):
 	if not value: return value
 	if not charset: return value
 	if charset == 'gb2312': charset = 'gbk'
+	elif charset == 'x-gb2312': charset = 'gbk'
+	elif charset == 'x-gbk': charset = 'gbk'
 	return value.decode(charset, 'replace')
 
 def str_addrs(addrs):
@@ -76,19 +78,26 @@ class CheckingMessage(object):
 			target.write(buf)
 
 	def check(self):
-		# more rule: recipient not listed in self.h_rcpts, but might be bcc...
+		# 也许应该检查收件人不在To/Cc中的情况，但可能是Bcc...
+		# 可能要求from地址是shterm.com之类才能bcc更好...
+		# 至少先把是否启用检查的规则打开
 		x = False
 		for name,addr in self.h_rcpts:
+			if addr.startswith('list-'): x = True
+			if addr in ('garyshi@shterm.com', 'shigl@shterm.com'): x = True
+		for addr in self.rcpts:
 			if addr.startswith('list-'): x = True
 			if addr in ('garyshi@shterm.com', 'shigl@shterm.com'): x = True
 		if not x: return True, 'skip check irrelevant address'
 
 		if not self.h_from: return False, 'absent from address'
 		if not self.h_to: return False, 'absent to addresses'
-		if self.h_from != self.sender: return False, 'sender address mismatch'
+		if self.h_from[1] != self.sender:
+			logging.warn('sender address mismatch: %s vs. %s' % (self.h_from[1], self.sender))
+			#return False, 'sender address mismatch'
 
-		for s in '1234',u'请转',u'转相关',u'转有关',u'转需求',u'老板',u'总经理',u'高级',u'训练',u'培训',u'如何做好',u'详细',u'资料',u'制度',u'模版',u'工具',u'考核',u'必备',u'条例',u'法规',u'团队',u'特训',u'执行力',u'管理',u'招聘',u'面试',u'技巧':
-			if s in self.h_from[0]: return False, 'subject match "%s"' % s
+		for s in '1234',u'请转',u'转相关',u'转有关',u'转需求',u'老板',u'总经理',u'高级',u'训练',u'培训',u'如何做好',u'详细',u'资料',u'制度',u'模版',u'工具',u'考核',u'必备',u'条例',u'法规',u'团队',u'特训',u'执行力',u'管理',u'招聘',u'面试',u'技巧',u'专业',u'合同':
+			if s in self.h_from[0]: return False, 'sender match "%s"' % s
 
 		for s in u'准时开课',u'研修班',u'社保法',u'新任经理',u'用数字说话',u'注塑部',u'实战',u'训练营',u'零缺陷',u'疯狂训练',u'工伤保险',u'车间主任',u'为企业':
 			if s in self.h_from[0]: return False, 'sender match "%s"' % s
