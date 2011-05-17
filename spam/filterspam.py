@@ -27,6 +27,21 @@ def str_addrs(addrs):
 		L.append(s)
 	return ', '.join(L)
 
+def check_spaces(s):
+	toggle_space = False
+	num_spaces = num_toggles = 0
+	for c in s:
+		if c == ' ':
+			num_space += 1
+			if not toggle_space:
+				toggle_space = True
+				num_toggles += 1
+		else:
+			toggle_space = False
+	if num_spaces >= 8: return True
+	if num_toggles > 4: return True
+	return False
+
 class CheckingMessage(object):
 	def __init__(self, sender, rcpts, f):
 		self.sender = sender
@@ -78,17 +93,19 @@ class CheckingMessage(object):
 			target.write(buf)
 
 	def check(self):
-		# 也许应该检查收件人不在To/Cc中的情况，但可能是Bcc...
-		# 可能要求from地址是shterm.com之类才能bcc更好...
-		# 至少先把是否启用检查的规则打开
 		x = False
-		for name,addr in self.h_rcpts:
-			if addr.startswith('list-'): x = True
-			if addr in ('garyshi@shterm.com', 'shigl@shterm.com'): x = True
 		for addr in self.rcpts:
 			if addr.startswith('list-'): x = True
 			if addr in ('garyshi@shterm.com', 'shigl@shterm.com'): x = True
 		if not x: return True, 'skip check irrelevant address'
+
+		# only allows bcc, when sender is of our domains
+		x = False
+		for name,addr in self.h_rcpts:
+			if addr.startswith('list-'): x = True
+			if addr in ('garyshi@shterm.com', 'shigl@shterm.com'): x = True
+		if not x and not self.h_from[1].endswith('@shterm.com'):
+			return False, 'rcpt not listed in To/Cc'
 
 		if not self.h_from: return False, 'absent from address'
 		if not self.h_to: return False, 'absent to addresses'
@@ -96,21 +113,25 @@ class CheckingMessage(object):
 			logging.warn('sender address mismatch: %s vs. %s' % (self.h_from[1], self.sender))
 			#return False, 'sender address mismatch'
 
-		for s in '1234',u'请转',u'转相关',u'转有关',u'转需求',u'老板',u'总经理',u'高级',u'训练',u'培训',u'如何做好',u'详细',u'资料',u'制度',u'模版',u'工具',u'考核',u'必备',u'条例',u'法规',u'团队',u'特训',u'执行力',u'管理',u'招聘',u'面试',u'技巧',u'专业',u'合同':
+		for s in '1234',u'请转',u'转相关',u'转有关',u'转需求',u'老板',u'总经理',u'高级',u'训练',u'培训',u'如何做好',u'详细',u'资料',u'制度',u'模版',u'工具',u'考核',u'必备',u'条例',u'法规',u'团队',u'特训',u'执行力',u'管理',u'招聘',u'面试',u'技巧',u'专业',u'合同',u'策略',u'筹划':
 			if s in self.h_from[0]: return False, 'sender match "%s"' % s
 
 		for s in u'准时开课',u'研修班',u'社保法',u'新任经理',u'用数字说话',u'注塑部',u'实战',u'训练营',u'零缺陷',u'疯狂训练',u'工伤保险',u'车间主任',u'为企业':
 			if s in self.h_from[0]: return False, 'sender match "%s"' % s
 			if s in self.h_subject: return False, 'subject match "%s"' % s
 
-		for s in u'╭╯',u'╰╮',u'＜',u'＞',u'√',u'╰',u'☆',u'◇',u'┻',u'≡',u'¤':
+		for s in u'╭╯',u'╰╮',u'＜',u'＞',u'√',u'╰',u'☆',u'◇',u'┻',u'≡',u'¤',u'╬':
 			if self.h_from[0].startswith(s) or self.h_from[0].endswith(s): return False, 'sender match "%s"' % s
 			if self.h_subject.startswith(s) or self.h_subject.endswith(s): return False, 'subject match "%s"' % s
 
+		for s in (u'如何成为',):
+			if self.h_subject.startswith(s): return False, 'subject starts with "%s"' % s
+		for s in u'经理',u'主管':
+			if self.h_subject.endswith(s): return False, 'subject ends with "%s"' % s
 		for s in u'部门经理',u'部门主管':
 			if s in self.h_subject: return False, 'subject match "%s"' % s
-		for s in u'经理',u'主管':
-			if self.h_subject.endswith(s): return False, 'subject match "%s"' % s
+		if u'物料' in self.h_subject and u'生产' in self.h_subject: return False, 'subject match "物料" + "生产"'
+		if check_spaces(self.h_subject): return False, 'subject match space pattern'
 
 		# TODO: really check DomainKey and DKIM
 		if self.h_from[1].endswith('@gmail.com'):
