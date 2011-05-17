@@ -1,0 +1,48 @@
+#!/usr/bin/python2.6
+import sys
+import os
+from subprocess import Popen, PIPE
+
+def ssh_keyscan(host, hash=False):
+	cmdline = 'ssh-keyscan -t rsa '
+	if hash: cmdline += '-H '
+	cmdline += host
+	p = Popen(cmdline, close_fds=True, shell=True, stdout=PIPE, stderr=PIPE)
+	stderr = p.stderr.read()
+	key = p.stdout.read().strip()
+	if p.wait() != 0: return None
+	return key
+
+def update_keyfile(host, key, filename, uid, gid):
+	dirname = os.path.dirname(filename)
+	if not os.path.isdir(dirname):
+		os.mkdir(dirname, 0700)
+		if os.getuid() == 0: os.chown(dirname, uid, gid)
+
+	if os.path.exists(filename):
+		cmdline = 'ssh-keygen -R %s -f %s' % (host, filename)
+		p = Popen(cmdline, close_fds=True, shell=True, stdout=PIPE, stderr=PIPE)
+		stdout = p.stdout.read()
+		stderr = p.stderr.read()
+		if p.wait() != 0:
+			print >>sys.stderr, 'remove old key from %s failed.' % filename
+			return False
+		# remove the backup file
+		try: os.unlink(filename + '.old')
+		except: pass
+
+	f = open(filename, 'a')
+	print >>f, key
+	f.close()
+	os.chmod(filename, 0644)
+	if os.getuid() == 0: os.chown(filename, uid, gid)
+
+	return True
+
+def main(hosts):
+	for host in hosts:
+		key = ssh_keyscan(host)
+		if os.getuid() == 0: update_keyfile(host, key, '/etc/ssh/ssh_known_hosts', 0, 0)
+		update_keyfile(host, key, '%s/.ssh/known_hosts' % os.environ['HOME'], os.getuid(), os.getgid())
+
+if __name__ == '__main__': main(sys.argv[1:])
