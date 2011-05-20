@@ -41,6 +41,8 @@ def update_keyfile(host, key, filename, uid, gid):
 
 def main(hosts):
 	for host in hosts:
+		i = host.find('@')
+		if i >= 0: host = host[i+1:]
 		key = ssh_keyscan(host)
 		if os.getuid() == 0: update_keyfile(host, key, '/etc/ssh/ssh_known_hosts', 0, 0)
 		update_keyfile(host, key, '%s/.ssh/known_hosts' % os.environ['HOME'], os.getuid(), os.getgid())
